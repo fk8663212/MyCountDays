@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">MyCountDays</string>
+    <string name="title_activity_addevent">AddeventActivity</string>
+</resources>
