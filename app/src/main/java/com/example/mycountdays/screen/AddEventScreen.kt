@@ -47,17 +47,28 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.rememberAsyncImagePainter
 import com.example.mycountdays.data.AppDatabase
 import com.example.mycountdays.data.Event
+import com.example.mycountdays.data.EventApplication
+import com.example.mycountdays.data.EventViewModel
+import com.example.mycountdays.data.InventoryViewModelFactory
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import androidx.compose.ui.platform.LocalContext
+
+
 
 //資料庫
-private lateinit var database: AppDatabase
 
-
+private lateinit var viewModel: EventViewModel
+//private lateinit var database: AppDatabase
 
 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddEventScreen(navController: NavController) {
+    val context = LocalContext.current
+    val database = remember { AppDatabase.getDatabase(context) }
 
     var text by remember { mutableStateOf("") }
     var selectDate by remember { mutableStateOf("") }
@@ -77,7 +88,6 @@ fun AddEventScreen(navController: NavController) {
 
 
     //日期選擇器
-    val context = LocalContext.current
     val datePickerDialog  = DatePickerDialog(
         context,
         { _: DatePicker, year: Int, month: Int, dayOfMonth: Int ->
@@ -258,7 +268,11 @@ Scaffold(
                             notify1Year = notify1Year,
                             category = ""
                         )
+                        CoroutineScope(Dispatchers.IO).launch {
+                            database.eventDao().insertEvent(event)
+                            database.eventDao().getAllEvents()
 
+                        }
 
                         navController.navigate("home")
 

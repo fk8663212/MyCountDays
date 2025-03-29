@@ -7,9 +7,9 @@ import com.example.mycountdays.EventDao
 import kotlinx.coroutines.launch
 
 class EventViewModel(private val eventDao: EventDao) : ViewModel() {
-    private fun insertItem(event: Event) {
+    fun insertItem(event: Event) {
         viewModelScope.launch {
-            eventDao.insert(event)
+            //eventDao.insert(event)
         }
     }
 }
