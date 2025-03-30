@@ -72,6 +72,7 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.7.5")
     implementation ("androidx.activity:activity-compose:1.7.0")
     implementation ("io.coil-kt:coil-compose:2.1.0") // 用於加載圖片
+    implementation ("org.burnoutcrew.composereorderable:reorderable:0.9.6")//
 
 
     val room_version = "2.6.1"

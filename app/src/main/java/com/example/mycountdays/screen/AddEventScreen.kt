@@ -30,8 +30,11 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.example.mycountdays.ui.theme.MyCountDaysTheme
 import android.app.DatePickerDialog
+import android.content.Context
 import android.net.Uri
+import android.util.Log
 import android.widget.DatePicker
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
@@ -54,7 +57,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalContext
-
+import java.io.IOException
+import java.io.File
 
 
 //資料庫
@@ -258,11 +262,20 @@ Scaffold(
 
                 Button(
                     onClick = {
+                        if (text.isEmpty()) {
+                            Toast.makeText(context, "請輸入標題", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        val imagePath = imageUri?.let { uri ->
+                            saveImageToInternalStorage(context, uri)
+                        } ?: ""
+
+
                         //新增置資料庫
                         val event = Event(
                             title = text,
                             date = selectDate,
-                            imageUri = imageUri?.toString(),
+                            imageUri = imagePath,
                             showNotification = showNotification,
                             notify100Days = notify100Days,
                             notify1Year = notify1Year,
@@ -271,10 +284,11 @@ Scaffold(
                         CoroutineScope(Dispatchers.IO).launch {
                             database.eventDao().insertEvent(event)
                             database.eventDao().getAllEvents()
-
                         }
 
-                        navController.navigate("home")
+                        navController.navigate("home") {
+                            popUpTo("home") { inclusive = true }
+                        }
 
                     },
                     modifier = Modifier.fillMaxWidth(),
@@ -290,6 +304,34 @@ Scaffold(
 
     }
 }
+
+fun saveImageToInternalStorage(context: Context, imageUri: Uri): String? {
+    return try {
+        val inputStream = context.contentResolver.openInputStream(imageUri)
+        if (inputStream == null) {
+            Log.e("SaveImage", "Unable to open InputStream for URI: $imageUri")
+            return null
+        }
+        // 產生檔案名稱，避免重複
+        val fileName = "event_${System.currentTimeMillis()}.jpg"
+        val file = File(context.filesDir, fileName)
+        // 嘗試建立新檔案
+        if (!file.exists()) {
+            file.createNewFile()
+        }
+        inputStream.use { input ->
+            file.outputStream().use { output ->
+                input.copyTo(output)
+            }
+        }
+        Log.d("SaveImage", "File saved: ${file.absolutePath}, exists: ${file.exists()}")
+        file.absolutePath
+    } catch (e: IOException) {
+        e.printStackTrace()
+        null
+    }
+}
+
 
 
 
