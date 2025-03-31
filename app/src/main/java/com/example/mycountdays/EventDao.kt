@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Update
 import com.example.mycountdays.data.Event
 import kotlinx.coroutines.flow.Flow
 
@@ -16,6 +17,9 @@ interface EventDao {
     @Delete
     suspend fun delete(event: Event)
 
-    @Query("SELECT * FROM events")
+    @Query("SELECT * FROM events ORDER BY `order` ASC")
     suspend fun getAllEvents(): List<Event>
+
+    @Update
+    suspend fun updateEvents(events: List<Event>)
 }

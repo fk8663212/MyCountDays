@@ -14,4 +14,5 @@ data class Event(
     val showNotification: Boolean = false,
     val notify100Days: Boolean = true,
     val notify1Year: Boolean = true,
+    var order: Int = 0 // 用來記錄排序順序
 )

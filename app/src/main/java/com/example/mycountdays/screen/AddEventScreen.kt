@@ -70,7 +70,7 @@ private lateinit var viewModel: EventViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddEventScreen(navController: NavController) {
+fun AddEventScreen(navController: NavController, option: String?) {
     val context = LocalContext.current
     val database = remember { AppDatabase.getDatabase(context) }
 
@@ -87,6 +87,7 @@ fun AddEventScreen(navController: NavController) {
     var showNotification by remember { mutableStateOf(false) }
     var notify100Days by remember { mutableStateOf(true) }
     var notify1Year by remember { mutableStateOf(true) }
+    var category by remember { mutableStateOf("") }
 
 
 
@@ -175,21 +176,6 @@ Scaffold(
 
 
                 }
-//                Card(
-//                    modifier = Modifier
-//                        .fillMaxWidth()
-//                        .padding(vertical = 10.dp)
-//                ) {
-//                    Row(
-//                        modifier = Modifier.fillMaxWidth(),
-//                        horizontalArrangement = Arrangement.SpaceBetween,
-//                        verticalAlignment = Alignment.CenterVertically
-//                    ) {
-//                        Text("類型", )
-//                        Text("D-DAY", )
-//                    }
-//
-//                }
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -217,6 +203,27 @@ Scaffold(
                                 modifier = Modifier.size(50.dp)
                             )
                         }
+                    }
+
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 10.dp)
+                        .clickable(onClick = {
+                            navController.navigate("selectEventTypeScreen")
+                        })
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("類型")
+                        // 測試用方式取得 option (若傳入 null 則試著從 navController 讀取)
+                        Log.d("AddEventScreen", "option: $option")
+                        category = option ?: navController.currentBackStackEntry?.arguments?.getString("option") ?: ""
+                        Text(text = category)
                     }
 
                 }
@@ -260,6 +267,7 @@ Scaffold(
                     }
                 }
 
+
                 Button(
                     onClick = {
                         if (text.isEmpty()) {
@@ -279,7 +287,7 @@ Scaffold(
                             showNotification = showNotification,
                             notify100Days = notify100Days,
                             notify1Year = notify1Year,
-                            category = ""
+                            category = category
                         )
                         CoroutineScope(Dispatchers.IO).launch {
                             database.eventDao().insertEvent(event)
@@ -341,6 +349,6 @@ fun saveImageToInternalStorage(context: Context, imageUri: Uri): String? {
 @Composable
 fun GreetingPreview() {
     MyCountDaysTheme {
-        AddEventScreen(navController = rememberNavController())
+        AddEventScreen(navController = rememberNavController(), option = null)
     }
 }

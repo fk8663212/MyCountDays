@@ -3,10 +3,10 @@ package com.example.mycountdays
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,79 +26,98 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
-import androidx.navigation.compose.rememberNavController
-import com.example.mycountdays.screen.AddEventScreen
-import com.example.mycountdays.ui.theme.MyCountDaysTheme
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import coil.compose.rememberAsyncImagePainter
 import com.example.mycountdays.data.AppDatabase
 import com.example.mycountdays.data.Event
+import com.example.mycountdays.screen.AddEventScreen
+import com.example.mycountdays.ui.theme.MyCountDaysTheme
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.File
 import org.burnoutcrew.reorderable.detectReorderAfterLongPress
 import org.burnoutcrew.reorderable.rememberReorderableLazyListState
 import org.burnoutcrew.reorderable.reorderable
-
-
+import androidx.compose.foundation.gestures.detectTapGestures
+import com.example.mycountdays.screen.SelectEventTypeScreen
+import androidx.navigation.navArgument
 
 class MainActivity : ComponentActivity() {
     private lateinit var database: AppDatabase
-
 
     override fun onCreate(savedInstanceState: Bundle?) {
         database = AppDatabase.getDatabase(this)
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-
-            var saveEvent= remember { mutableStateOf<List<Event>>(emptyList()) }
+            // 使用 remember 建立 mutableState 保存事件清單
+            val saveEvent = remember { mutableStateOf<List<Event>>(emptyList()) }
             val lifecycleOwner = LocalLifecycleOwner.current
+            val context = LocalContext.current
 
+            // 初始讀取資料庫
             LaunchedEffect(lifecycleOwner) {
-                // 立即讀取一次資料庫
                 saveEvent.value = database.eventDao().getAllEvents()
                 Log.d("MainActivity", "Initial load: ${saveEvent.value}")
             }
 
-
             MyCountDaysTheme {
                 val navController = rememberNavController()
 
+                // 監聽返回 home 時重新讀取資料
                 LaunchedEffect(navController) {
                     navController.currentBackStackEntryFlow.collect { backStackEntry ->
                         if (backStackEntry.destination.route == "home") {
-                            // 這裡呼叫 suspend 函數 getAllEvents()，自動在協程中執行
-                            saveEvent.value = database.eventDao().getAllEvents()
-                            Log.d("MainActivity", "Reload on home: ${saveEvent.value}")
+                            // 在 IO 協程中讀取資料庫
+                            lifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+                                val events = database.eventDao().getAllEvents()
+                                // 回到主線程更新狀態
+                                launch(Dispatchers.Main) {
+                                    saveEvent.value = events
+                                    Log.d("MainActivity", "Reload on home: ${saveEvent.value}")
+                                }
+                            }
                         }
                     }
                 }
 
-                NavHost(navController = navController, startDestination = "home"){
-                    composable("addEventScreen"){
-                        AddEventScreen(navController)
+                NavHost(navController = navController, startDestination = "home") {
+                    composable("selectEventTypeScreen") {
+                        SelectEventTypeScreen(navController)
                     }
-                    composable("home"){
-                        Greeting(navController, saveEvent =saveEvent)
+                    composable(
+                        route = "addEventScreen?option={option}",
+                        arguments = listOf(
+                            navArgument("option") {
+                                type = androidx.navigation.NavType.StringType
+                                defaultValue = ""
+                            }
+                        )
+                    ) { backStackEntry ->
+                        AddEventScreen(navController, backStackEntry.arguments?.getString("option"))
                     }
-
+                    composable("home") {
+                        Greeting(navController, saveEvent = saveEvent)
+                    }
                 }
             }
         }
@@ -108,98 +127,124 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun Greeting(navController: NavController, saveEvent: MutableState<List<Event>>) {
-    Scaffold (
+    val context = LocalContext.current
+    // 取得資料庫實例
+    val database = remember { AppDatabase.getDatabase(context) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = {
-                    Text(text = "My Count Days")
-                },
-                navigationIcon = {
-
-                }
+                title = { Text(text = "My Count Days") },
+                navigationIcon = { /* 可加入返回圖示 */ }
             )
         },
         floatingActionButton = {
             FloatingActionButton(onClick = {
-                //使用navigation-compose 切換 addEventScreen
-                navController.navigate("addEventScreen")
-                //切回後更新畫面
-
-
+                navController.navigate("selectEventTypeScreen")
             }) {
                 Icon(Icons.Default.Add, contentDescription = "新增事件")
             }
         },
         floatingActionButtonPosition = androidx.compose.material3.FabPosition.Center
-    ){
-        paddingValues ->
+    ) { paddingValues ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-        ){
-            LazyColumn(
-                modifier = Modifier
-                    .padding(20.dp, vertical = 10.dp)
-            ) {
-                items(saveEvent.value.size){ index ->
-                    // 取得目前的事件
-                    val event = saveEvent.value[index]
-                    Column {
-                        EventCard(event = event)
+        ) {
+            // 使用 ReorderableEventList 顯示可排序列表
+            ReorderableEventList(events = saveEvent.value, onMove = { from, to ->
+                // 1. 先更新本地狀態
+                val currentList = saveEvent.value.toMutableList()
+                val movedItem = currentList.removeAt(from)
+                currentList.add(to, movedItem)
+                // 2. 重新設定每個事件的 order 欄位
+                currentList.forEachIndexed { index, event ->
+                    event.order = index
+                }
+                // 更新狀態以立即反映拖曳效果
+                saveEvent.value = currentList
+                Log.d("Greeting", "Reordered locally: from $from to $to, new order: ${currentList.map { it.order }}")
+
+                // 3. 在 IO 協程中更新資料庫，更新完後再重新讀取並更新 UI
+                lifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+                    database.eventDao().updateEvents(currentList)
+                    // 重新讀取資料庫，確保順序正確
+                    val updatedEvents = database.eventDao().getAllEvents()
+                    Log.d("Greeting", "Database updated: ${updatedEvents.map { it.order }}")
+                    launch(Dispatchers.Main) {
+                        saveEvent.value = updatedEvents
                     }
                 }
-            }
+            })
         }
     }
 }
 
-//@Composable
-//fun ReorderableEventList(
-//    events: List<Event>,
-//    onMove: (from: Int, to: Int) -> Unit
-//) {
-//    // 使用庫提供的狀態
-//    val state = rememberReorderableLazyListState(onMove = { from, to ->
-//
-//    })
-//
-//    LazyColumn(
-//        modifier = Modifier
-//            .reorderable(
-//                state = reorderState,
-//                onMove = { from, to -> onMove(from.index, to.index) }
-//            )
-//            .detectReorderAfterLongPress(reorderState)
-//    ) {
-//        itemsIndexed(events) { index, event ->
-//            // 根據 reorderState.highlightedItemIndex 判斷是否正在拖曳
-//            EventCard(event = event)
-//        }
-//    }
-//}
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun ReorderableEventList(
+    events: List<Event>,
+    onMove: (fromIndex: Int, toIndex: Int) -> Unit
+) {
+    // 建立拖曳排序狀態，使用新版 API (0.9.6)
+    val reorderState = rememberReorderableLazyListState(
+        onMove = { from, to ->
+            onMove(from.index, to.index)
+        }
+    )
 
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+
+
+    LazyColumn(
+        state = reorderState.listState,
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onLongPress = {
+                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                    }
+                )
+            }
+            .reorderable(reorderState)
+            .detectReorderAfterLongPress(reorderState)
+    ) {
+        itemsIndexed(events) { index, event ->
+            // 每個項目加入動畫效果
+            EventCard(
+                event = event,
+                modifier = Modifier.animateItemPlacement()
+            )
+        }
+    }
+}
 
 @Composable
-fun EventCard(event: Event) {
+fun EventCard(event: Event, modifier: Modifier = Modifier) {
     Card(
         colors = androidx.compose.material3.CardDefaults.cardColors(
-            containerColor = androidx.compose.ui.graphics.Color.Transparent
+            //containerColor = androidx.compose.ui.graphics.Color.Transparent
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         ),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 10.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
             if (!event.imageUri.isNullOrEmpty()) {
+                // 轉換檔案路徑成 File 與 Uri
                 val file = File(event.imageUri)
                 val fileUri = Uri.fromFile(file)
                 val painter = rememberAsyncImagePainter(
                     model = fileUri,
-                    placeholder = painterResource(id = R.drawable.ic_launcher_background), // 請替換成您實際的資源
+                    placeholder = painterResource(id = R.drawable.ic_launcher_background)
                 )
-
-                Log.d("Greeting", "File URI: $fileUri")
+                Log.d("EventCard", "File URI: $fileUri")
                 Image(
                     painter = painter,
                     contentDescription = "卡片背景圖片",
@@ -210,7 +255,9 @@ fun EventCard(event: Event) {
             Column(
                 modifier = Modifier
                     .padding(20.dp)
-                    .fillMaxWidth()
+                    .fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+
             ) {
                 Text(text = event.title, color = MaterialTheme.colorScheme.onSurface)
                 Text(text = event.date, color = MaterialTheme.colorScheme.onSurface)
@@ -220,9 +267,50 @@ fun EventCard(event: Event) {
 }
 
 @Preview(showBackground = true)
+
 @Composable
 fun GreetingPreview() {
     MyCountDaysTheme {
-        Greeting(navController = rememberNavController(), saveEvent = remember { mutableStateOf<List<Event>>(emptyList()) })
+        // 直接建立假資料狀態
+        val dummyEvents = getDummyEvents()
+        val saveEvent = remember { mutableStateOf(dummyEvents) }
+        // 使用 rememberNavController() 傳入 navController
+        Greeting(navController = rememberNavController(), saveEvent = saveEvent)
     }
+}
+
+//假資料
+fun getDummyEvents(): List<Event> {
+    return listOf(
+        Event(
+            id = 1,
+            title = "生日派對",
+            date = "2023/04/01",
+            imageUri = "/data/user/0/com.example.mycountdays/files/dummy1.jpg",
+            showNotification = true,
+            notify100Days = false,
+            notify1Year = false,
+            category = "D-DAY"
+        ),
+        Event(
+            id = 2,
+            title = "畢業典禮",
+            date = "2023/04/10",
+            imageUri = "", // 空字串表示沒有圖片
+            showNotification = false,
+            notify100Days = true,
+            notify1Year = false,
+            category = "D-DAY"
+        ),
+        Event(
+            id = 3,
+            title = "旅行計畫",
+            date = "2023/05/01",
+            imageUri = "/data/user/0/com.example.mycountdays/files/dummy2.jpg",
+            showNotification = true,
+            notify100Days = true,
+            notify1Year = true,
+            category = "D-DAY"
+        )
+    )
 }
