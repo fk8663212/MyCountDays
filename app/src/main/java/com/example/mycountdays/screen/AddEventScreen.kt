@@ -50,15 +50,16 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.rememberAsyncImagePainter
 import com.example.mycountdays.data.AppDatabase
 import com.example.mycountdays.data.Event
-import com.example.mycountdays.data.EventApplication
 import com.example.mycountdays.data.EventViewModel
 import com.example.mycountdays.data.InventoryViewModelFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.platform.LocalContext
 import java.io.IOException
 import java.io.File
+import com.example.mycountdays.notification.NotificationHelper
 
 
 //資料庫
@@ -291,6 +292,15 @@ Scaffold(
                         )
                         CoroutineScope(Dispatchers.IO).launch {
                             database.eventDao().insertEvent(event)
+                            
+                            // 處理通知
+                            if (showNotification) {
+                                withContext(Dispatchers.Main) {
+                                    val notificationHelper = NotificationHelper(context)
+                                    notificationHelper.showPersistentNotification(event)
+                                }
+                            }
+                            
                             database.eventDao().getAllEvents()
                         }
 

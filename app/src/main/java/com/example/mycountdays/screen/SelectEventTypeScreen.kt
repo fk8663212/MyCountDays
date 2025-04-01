@@ -50,20 +50,28 @@ fun SelectEventTypeScreen(navController: NavController) {
         }
         Button(
             onClick = {
-                navController.navigate("addEventScreen?option=月數與天數")
+                navController.navigate("addEventScreen?option=每月")
             },
             modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
         ) {
-            Text("月數與天數")
+            Text("每月")
         }
-        Button(
-            onClick = {
-                navController.navigate("addEventScreen?option=年月日")
-            },
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
-        ) {
-            Text("年月日")
-        }
+        // Button(
+        //     onClick = {
+        //         navController.navigate("addEventScreen?option=月數與天數")
+        //     },
+        //     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+        // ) {
+        //     Text("月數與天數")
+        // }
+        // Button(
+        //     onClick = {
+        //         navController.navigate("addEventScreen?option=年月日")
+        //     },
+        //     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+        // ) {
+        //     Text("年月日")
+        // }
     }
 }
 
