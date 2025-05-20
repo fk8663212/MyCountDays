@@ -4,6 +4,8 @@
 
     <!-- 添加通知權限 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 添加啟動時自動運行的權限 -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:allowBackup="true"
@@ -31,6 +33,14 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- 添加一個 BroadcastReceiver 在設備重啟後自動啟動通知服務 -->
+        <receiver
+            android:name=".notification.BootCompletedReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

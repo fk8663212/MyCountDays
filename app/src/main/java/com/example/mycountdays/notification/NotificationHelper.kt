@@ -23,6 +23,9 @@ class NotificationHelper(private val context: Context) {
         const val CHANNEL_ID_PERSISTENT = "persistent_notifications"
         const val CHANNEL_ID_REMINDER = "reminder_notifications"
         private const val PERSISTENT_NOTIFICATION_ID_BASE = 1000
+        
+        // 新增一個變數來保存上次更新通知的日期
+        private var lastUpdateDate = LocalDate.now()
     }
 
     init {
@@ -56,9 +59,25 @@ class NotificationHelper(private val context: Context) {
         }
     }
 
+    // 檢查是否擁有發送通知的權限
+    fun hasNotificationPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == 
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+        } else {
+            // Android 13 以前的版本不需要明確請求通知權限
+            true
+        }
+    }
+
     // 顯示常駐通知
     @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
     fun showPersistentNotification(event: Event) {
+        // 先檢查權限
+        if (!hasNotificationPermission()) {
+            return  // 如果沒有權限，直接返回
+        }
+        
         val intent = Intent(context, MainActivity::class.java).apply {
             putExtra("EVENT_ID", event.id)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
@@ -81,13 +100,11 @@ class NotificationHelper(private val context: Context) {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true) // 讓通知常駐
             .setContentIntent(pendingIntent)
+            // 確保通知不會被系統的通知摘要合併
+            .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY)
             .build()
             
-        try {
-            NotificationManagerCompat.from(context).notify(PERSISTENT_NOTIFICATION_ID_BASE + event.id, notification)
-        } catch (e: SecurityException) {
-            // 處理缺少權限的情況
-        }
+        NotificationManagerCompat.from(context).notify(PERSISTENT_NOTIFICATION_ID_BASE + event.id, notification)
     }
     
     // 移除常駐通知
@@ -98,6 +115,11 @@ class NotificationHelper(private val context: Context) {
     // 顯示紀念日提醒通知
     @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
     fun showReminderNotification(event: Event, message: String) {
+        // 先檢查權限
+        if (!hasNotificationPermission()) {
+            return  // 如果沒有權限，直接返回
+        }
+        
         val intent = Intent(context, MainActivity::class.java).apply {
             putExtra("EVENT_ID", event.id)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
@@ -119,11 +141,7 @@ class NotificationHelper(private val context: Context) {
             .setAutoCancel(true) // 點擊後自動移除
             .build()
             
-        try {
-            NotificationManagerCompat.from(context).notify(event.id, notification)
-        } catch (e: SecurityException) {
-            // 處理缺少權限的情況
-        }
+        NotificationManagerCompat.from(context).notify(event.id, notification)
     }
     
     // 計算事件顯示文字
@@ -144,7 +162,7 @@ class NotificationHelper(private val context: Context) {
             }
             "紀念日" -> {
                 if (diff <= 0) {
-                    val passedDays = -diff
+                    val passedDays = -diff + 1  // 加1，讓紀念日當天算作第1天
                     "已經 $passedDays 天"
                 } else {
                     "還沒開始"
@@ -184,5 +202,21 @@ class NotificationHelper(private val context: Context) {
                 if (diff > 0) "還有 $diff 天" else if (diff < 0) "已過 ${-diff} 天" else "就是今天！"
             }
         }
+    }
+
+    /**
+     * 檢查是否需要更新所有通知（當日期變更時）
+     * 如果今天的日期與上次更新日期不同，則返回true
+     */
+    fun shouldUpdateNotifications(): Boolean {
+        val today = LocalDate.now()
+        return !today.equals(lastUpdateDate)
+    }
+
+    /**
+     * 更新最後更新日期為今天
+     */
+    fun updateLastUpdateDate() {
+        lastUpdateDate = LocalDate.now()
     }
 }

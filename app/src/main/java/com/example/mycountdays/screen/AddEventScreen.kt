@@ -64,8 +64,7 @@ import com.example.mycountdays.notification.NotificationHelper
 
 //資料庫
 
-private lateinit var viewModel: EventViewModel
-//private lateinit var database: AppDatabase
+
 
 
 
@@ -182,7 +181,9 @@ Scaffold(
                         .fillMaxWidth()
                         .padding(vertical = 10.dp)
                         .clickable(onClick = {
-                            imagePickerLauncher.launch(PickVisualMediaRequest(ImageOnly))})
+                            // 改為導航到背景選擇頁面，而非直接調用圖片選擇器
+                            navController.navigate("selectBackgroundScreen")
+                        })
                 ){
                     Row(
                         modifier = Modifier.fillMaxWidth(),

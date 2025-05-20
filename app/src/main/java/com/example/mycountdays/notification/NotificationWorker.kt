@@ -24,9 +24,9 @@ class NotificationWorker(
         // 獲取所有事件
         val events = runBlocking { database.eventDao().getAllEvents() }
         
-        // 處理每個事件
+        // 始終更新所有常駐通知，確保顯示最新的日期
         for (event in events) {
-            // 處理常駐通知
+            // 處理常駐通知 - 每次工作執行時始終更新，確保日期正確
             if (event.showNotification) {
                 notificationHelper.showPersistentNotification(event)
             }
@@ -71,6 +71,8 @@ class NotificationWorker(
             }
         }
         
+        // 更新最後更新日期
+        notificationHelper.updateLastUpdateDate()
         return Result.success()
     }
 }

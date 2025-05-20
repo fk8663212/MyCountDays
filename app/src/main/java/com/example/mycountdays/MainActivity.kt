@@ -1,6 +1,10 @@
 package com.example.mycountdays
 
 import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -84,6 +88,7 @@ import java.util.concurrent.TimeUnit
 class MainActivity : ComponentActivity() {
     private lateinit var database: AppDatabase
     private lateinit var notificationHelper: NotificationHelper
+    private var dateChangeReceiver: BroadcastReceiver? = null
 
     // 權限請求
     private val requestPermissionLauncher = registerForActivityResult(
@@ -106,6 +111,9 @@ class MainActivity : ComponentActivity() {
 
         // 設置定期工作來檢查通知
         setupNotificationWorker()
+
+        // 註冊日期變更廣播接收器
+        registerDateChangeReceiver()
 
         setContent {
             // 使用 remember 建立 mutableState 保存事件清單
@@ -172,9 +180,55 @@ class MainActivity : ComponentActivity() {
                             DetailScreen(event = event, navController = navController)
                         }
                     }
+                    // 添加背景選擇頁面路由
+                    composable("selectBackgroundScreen") {
+                        //SelectBackgroundScreen(navController)
+                    }
                 }
             }
         }
+    }
+    
+    // 在 onResume 中檢查是否需要更新通知
+    override fun onResume() {
+        super.onResume()
+        // 檢查日期是否變更，如果變更則更新所有通知
+        if (notificationHelper.shouldUpdateNotifications()) {
+            Log.d("MainActivity", "Date has changed, updating notifications")
+            updatePersistentNotifications()
+            notificationHelper.updateLastUpdateDate()
+        }
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        // 取消註冊廣播接收器
+        if (dateChangeReceiver != null) {
+            unregisterReceiver(dateChangeReceiver)
+            dateChangeReceiver = null
+        }
+    }
+
+    // 註冊日期變更廣播接收器
+    private fun registerDateChangeReceiver() {
+        dateChangeReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                when (intent.action) {
+                    Intent.ACTION_DATE_CHANGED, Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED -> {
+                        Log.d("MainActivity", "Date/time changed, updating notifications")
+                        updatePersistentNotifications()
+                    }
+                }
+            }
+        }
+        
+        // 註冊多個相關的時間/日期變更事件
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_DATE_CHANGED)
+            addAction(Intent.ACTION_TIME_CHANGED)
+            addAction(Intent.ACTION_TIMEZONE_CHANGED)
+        }
+        registerReceiver(dateChangeReceiver, filter)
     }
 
     private fun checkNotificationPermission() {
@@ -213,6 +267,9 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+            
+            // 更新完成後，更新最後更新日期
+            notificationHelper.updateLastUpdateDate()
         }
     }
 
@@ -221,8 +278,9 @@ class MainActivity : ComponentActivity() {
             .setRequiresBatteryNotLow(true)
             .build()
 
+        // 修改為每6小時執行一次，確保通知日期更加即時
         val dailyWorkRequest = PeriodicWorkRequestBuilder<NotificationWorker>(
-            1, TimeUnit.DAYS
+            6, TimeUnit.HOURS
         )
             .setConstraints(constraints)
             .build()
