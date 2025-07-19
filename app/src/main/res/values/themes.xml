@@ -2,4 +2,11 @@
 <resources>
 
     <style name="Theme.MyCountDays" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- 為 CropImageActivity 創建的橋接主題 -->
+    <style name="Theme.MyCountDays.Cropper" parent="Theme.AppCompat">
+        <item name="colorPrimary">@color/cropper_primary</item>
+        <item name="colorPrimaryDark">@color/cropper_primary_dark</item>
+        <item name="colorAccent">@color/cropper_accent</item>
+    </style>
 </resources>

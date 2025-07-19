@@ -33,6 +33,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- 使用系統的 AppCompat 主題 -->
+        <activity
+            android:name="com.canhub.cropper.CropImageActivity"
+            android:theme="@style/Theme.AppCompat"
+            tools:replace="android:theme" />
         <!-- 添加一個 BroadcastReceiver 在設備重啟後自動啟動通知服務 -->
         <receiver
             android:name=".notification.BootCompletedReceiver"

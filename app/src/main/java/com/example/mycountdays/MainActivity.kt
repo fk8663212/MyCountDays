@@ -81,6 +81,7 @@ import androidx.compose.material3.Switch
 import com.example.mycountdays.screen.SelectEventTypeScreen
 import androidx.navigation.navArgument
 import com.example.mycountdays.screen.DetailScreen
+import com.example.mycountdays.screen.SelectBackgroundScreen
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
@@ -181,8 +182,8 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                     // 添加背景選擇頁面路由
-                    composable("selectBackgroundScreen") {
-                        //SelectBackgroundScreen(navController)
+                    composable("SelectBackgroundScreen") {
+                        SelectBackgroundScreen(navController)
                     }
                 }
             }

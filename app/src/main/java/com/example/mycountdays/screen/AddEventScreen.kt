@@ -90,7 +90,24 @@ fun AddEventScreen(navController: NavController, option: String?) {
     var category by remember { mutableStateOf("") }
 
 
-
+    // 修改圖片選擇器，在選擇完圖片後導航到背景選擇頁面
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = PickVisualMedia()
+    ) { uri: Uri? ->
+        // 如果成功選擇圖片，導航到背景選擇頁面進行裁剪
+        if (uri != null) {
+            navController.currentBackStackEntry?.savedStateHandle?.set("imageUri", uri.toString())
+            navController.navigate("SelectBackgroundScreen")
+        }
+    }
+    
+    // 監聽裁剪後的結果
+    val croppedImageUriString = navController.currentBackStackEntry?.savedStateHandle?.get<String>("croppedImageUri")
+    croppedImageUriString?.let {
+        imageUri = Uri.parse(it)
+        // 清除已處理的數據
+        navController.currentBackStackEntry?.savedStateHandle?.remove<String>("croppedImageUri")
+    }
 
     //日期選擇器
     val datePickerDialog  = DatePickerDialog(
@@ -100,12 +117,6 @@ fun AddEventScreen(navController: NavController, option: String?) {
         },
         year,month,day
     )
-
-    val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = PickVisualMedia()
-    ) { uri: Uri? ->
-        imageUri = uri
-    }
 
 Scaffold(
     modifier = Modifier.fillMaxSize(),
@@ -181,8 +192,8 @@ Scaffold(
                         .fillMaxWidth()
                         .padding(vertical = 10.dp)
                         .clickable(onClick = {
-                            // 改為導航到背景選擇頁面，而非直接調用圖片選擇器
-                            navController.navigate("selectBackgroundScreen")
+                            // 直接啟動系統圖片選擇器
+                            imagePickerLauncher.launch(PickVisualMediaRequest(ImageOnly))
                         })
                 ){
                     Row(
