@@ -45,6 +45,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Switch
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.layout.ContentScale
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.rememberAsyncImagePainter
@@ -73,22 +75,34 @@ import com.example.mycountdays.notification.NotificationHelper
 fun AddEventScreen(navController: NavController, option: String?) {
     val context = LocalContext.current
     val database = remember { AppDatabase.getDatabase(context) }
+    val tag = "AddEventScreen"
 
-    var text by remember { mutableStateOf("") }
-    var selectDate by remember { mutableStateOf("") }
-    var imageUri by remember { mutableStateOf<Uri?>(null) }
-
+    // 使用 rememberSaveable 代替 remember 來保存狀態
+    var text by rememberSaveable { mutableStateOf("") }
+    var selectDate by rememberSaveable { mutableStateOf("") }
+    var imageUri by rememberSaveable { mutableStateOf<Uri?>(null) }
 
     val calendar = Calendar.getInstance()
     val year = calendar.get(Calendar.YEAR)
     val month = calendar.get(Calendar.MONTH)
     val day = calendar.get(Calendar.DAY_OF_MONTH)
 
-    var showNotification by remember { mutableStateOf(false) }
-    var notify100Days by remember { mutableStateOf(true) }
-    var notify1Year by remember { mutableStateOf(true) }
-    var category by remember { mutableStateOf("") }
+    // 使用 rememberSaveable 保存通知設置
+    var showNotification by rememberSaveable { mutableStateOf(false) }
+    var notify100Days by rememberSaveable { mutableStateOf(true) }
+    var notify1Year by rememberSaveable { mutableStateOf(true) }
+    var category by rememberSaveable { mutableStateOf("") }
 
+
+    // 圖片裁剪完成後的處理
+    LaunchedEffect(Unit) {
+        navController.currentBackStackEntry?.savedStateHandle?.get<String>("croppedImageUri")?.let { uriString ->
+            Log.d(tag, "收到裁剪後的圖片 URI: $uriString")
+            imageUri = Uri.parse(uriString)
+            // 處理完後清除 savedStateHandle 中的數據
+            navController.currentBackStackEntry?.savedStateHandle?.remove<String>("croppedImageUri")
+        }
+    }
 
     // 修改圖片選擇器，在選擇完圖片後導航到背景選擇頁面
     val imagePickerLauncher = rememberLauncherForActivityResult(
@@ -96,19 +110,13 @@ fun AddEventScreen(navController: NavController, option: String?) {
     ) { uri: Uri? ->
         // 如果成功選擇圖片，導航到背景選擇頁面進行裁剪
         if (uri != null) {
+            Log.d(tag, "選擇圖片 URI: $uri，導航到裁剪畫面")
+            // 將 URI 保存到 savedStateHandle 以便傳遞給裁剪頁面
             navController.currentBackStackEntry?.savedStateHandle?.set("imageUri", uri.toString())
             navController.navigate("SelectBackgroundScreen")
         }
     }
     
-    // 監聽裁剪後的結果
-    val croppedImageUriString = navController.currentBackStackEntry?.savedStateHandle?.get<String>("croppedImageUri")
-    croppedImageUriString?.let {
-        imageUri = Uri.parse(it)
-        // 清除已處理的數據
-        navController.currentBackStackEntry?.savedStateHandle?.remove<String>("croppedImageUri")
-    }
-
     //日期選擇器
     val datePickerDialog  = DatePickerDialog(
         context,
