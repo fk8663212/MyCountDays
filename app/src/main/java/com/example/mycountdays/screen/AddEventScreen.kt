@@ -104,6 +104,27 @@ fun AddEventScreen(navController: NavController, option: String?) {
         }
     }
 
+    // 修改 LaunchedEffect 依賴項，使其能夠在每次返回頁面時都檢查裁剪結果
+    // 使用 navController.currentBackStackEntry 作為依賴，確保頁面返回時重新檢查
+    LaunchedEffect(navController.currentBackStackEntry) {
+        Log.d(tag, "檢查裁剪結果...")
+        
+        // 嘗試從當前和上一個返回堆棧條目中獲取裁剪結果
+        val croppedUriString = navController.currentBackStackEntry?.savedStateHandle?.get<String>("croppedImageUri")
+            ?: navController.previousBackStackEntry?.savedStateHandle?.get<String>("croppedImageUri")
+            
+        Log.d(tag, "裁剪後的URI: $croppedUriString")
+        
+        croppedUriString?.let { uriString ->
+            Log.d(tag, "收到裁剪後的圖片 URI: $uriString")
+            imageUri = Uri.parse(uriString)
+            
+            // 從兩個可能的位置清除數據
+            navController.currentBackStackEntry?.savedStateHandle?.remove<String>("croppedImageUri")
+            navController.previousBackStackEntry?.savedStateHandle?.remove<String>("croppedImageUri")
+        }
+    }
+
     // 修改圖片選擇器，在選擇完圖片後導航到背景選擇頁面
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = PickVisualMedia()

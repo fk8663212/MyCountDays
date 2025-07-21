@@ -57,24 +57,34 @@ fun SelectBackgroundScreen(navController: NavController) {
             
             // 裁剪成功後，傳遞裁剪後的URI並返回
             croppedImageUri?.let { uri ->
-                // 將裁剪後的 URI 設置到前一頁的 savedStateHandle
+                // 將裁剪後的 URI 設置到多個位置，確保能被接收到
                 navController.previousBackStackEntry?.savedStateHandle?.set("croppedImageUri", uri.toString())
-                Log.d(tag, "保存裁剪URI到前一頁並返回: ${uri}")
+                navController.currentBackStackEntry?.savedStateHandle?.set("croppedImageUri", uri.toString())
+                Log.d(tag, "保存裁剪URI: ${uri}")
                 
-                // 根據發起頁面的路由決定如何返回
-                if (sourceRoute != "unknown_route") {
-                    // 使用明確的返回導航，確保返回到正確的頁面
-                    try {
-                        // 嘗試直接返回到發起頁面
-                        navController.popBackStack(sourceRoute, false)
-                        Log.d(tag, "已返回到發起頁面: $sourceRoute")
-                    } catch (e: Exception) {
-                        // 如果上面的方法失敗，嘗試簡單的返回
-                        Log.e(tag, "返回指定頁面失敗: ${e.message}, 嘗試簡單返回")
-                        navController.popBackStack()
+                // 使用明確的導航返回到 AddEventScreen
+                try {
+                    // 使用明確的導航返回到 AddEventScreen
+                    // 這會清除從 AddEventScreen 到當前頁面的導航歷史
+                    navController.navigate("addEventScreen") {
+                        // popUpTo 設置為 addEventScreen，確保不會建立重複的 AddEventScreen 頁面
+                        popUpTo("addEventScreen") {
+                            // inclusive = false 表示不要包含 addEventScreen 自己，
+                            // 這樣會保留 AddEventScreen 頁面而清除其它頁面
+                            inclusive = false
+                            
+                            // 保存狀態，這樣 AddEventScreen 的表單數據不會丟失
+                            saveState = true
+                        }
+                        // 避免創建相同頁面的多個副本
+                        launchSingleTop = true
+                        // 恢復之前保存的狀態
+                        restoreState = true
                     }
-                } else {
-                    // 如果無法確定發起頁面，使用簡單的返回
+                    Log.d(tag, "已導航回 AddEventScreen")
+                } catch (e: Exception) {
+                    Log.e(tag, "導航失敗: ${e.message}")
+                    // 如果明確導航失敗，嘗試簡單返回
                     navController.popBackStack()
                 }
             }
