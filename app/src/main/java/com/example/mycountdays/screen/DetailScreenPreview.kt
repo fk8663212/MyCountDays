@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -36,11 +37,22 @@ import java.io.File
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import com.example.mycountdays.data.AppDatabase
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import android.widget.Toast
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetailScreen(event: Event, navController: NavController) {
     val context = LocalContext.current
+    val database = remember { AppDatabase.getDatabase(context) }
+    var showMenu by remember { mutableStateOf(false) }
     
     // 計算已經過了多少天
     val formatter = DateTimeFormatter.ofPattern("yyyy/M/d")
@@ -99,6 +111,55 @@ fun DetailScreen(event: Event, navController: NavController) {
                             )
                         }
                     },
+                    actions = {
+                        // 新增三點選單
+                        IconButton(onClick = { showMenu = true }) {
+                            Icon(
+                                Icons.Default.MoreVert,
+                                contentDescription = "更多選項",
+                                tint = Color.White
+                            )
+                        }
+                        
+                        // 下拉選單
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false }
+                        ) {
+                            // 修改選項
+                            DropdownMenuItem(
+                                text = { Text("修改") },
+                                onClick = { 
+                                    showMenu = false
+                                    // 導航到修改頁面
+                                    navController.navigate("addEventScreen?option=${event.category}") {
+                                        // 將事件數據傳遞到下一個畫面
+                                        navController.currentBackStackEntry?.savedStateHandle?.set("editEvent", event)
+                                    }
+                                }
+                            )
+                            
+                            // 刪除選項
+                            DropdownMenuItem(
+                                text = { Text("刪除") },
+                                onClick = { 
+                                    showMenu = false
+                                    // 刪除事件
+                                    CoroutineScope(Dispatchers.IO).launch {
+                                        database.eventDao().delete(event)
+                                        
+                                        withContext(Dispatchers.Main) {
+                                            Toast.makeText(context, "已刪除事件", Toast.LENGTH_SHORT).show()
+                                            // 返回首頁
+                                            navController.navigate("home") {
+                                                popUpTo("home") { inclusive = true }
+                                            }
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                    },
                     colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                         containerColor = Color.Transparent
                     )
@@ -112,32 +173,6 @@ fun DetailScreen(event: Event, navController: NavController) {
                     .padding(paddingValues),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-//                // 標題部分 - 顯示在頂部
-//                item {
-//                    Column(
-//                        horizontalAlignment = Alignment.CenterHorizontally,
-//                        modifier = Modifier
-//                            .fillMaxWidth()
-//                            .padding(top = 16.dp, start = 16.dp, end = 16.dp)
-//                    ) {
-//                        Text(
-//                            text = event.title,
-//                            fontSize = 24.sp,
-//                            fontWeight = FontWeight.Bold,
-//                            color = Color.White,
-//                            textAlign = TextAlign.Center
-//                        )
-//
-//                        Spacer(modifier = Modifier.height(8.dp))
-//
-//                        Text(
-//                            text = "起始日期: ${event.date}",
-//                            fontSize = 16.sp,
-//                            color = Color.White
-//                        )
-//                    }
-//                }
-                
                 // 天數顯示部分 - 在中央位置
                 item {
                     Box(
@@ -177,11 +212,6 @@ fun DetailScreen(event: Event, navController: NavController) {
                     Text(text = "起始日期: ${event.date}",
                             fontSize = 16.sp,
                             color = Color.White)
-//                    Spacer(
-//                        modifier = Modifier
-//                            .fillMaxWidth()
-//                            .height(100.dp)
-//                    )
                 }
                 
                 // 紀念日計算部分 - 在底部

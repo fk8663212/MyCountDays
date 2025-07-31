@@ -1,5 +1,6 @@
 package com.example.mycountdays.screen
 
+import android.content.Context
 import android.net.Uri
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -23,16 +24,18 @@ fun SelectBackgroundScreen(navController: NavController) {
     val context = LocalContext.current
     val tag = "SelectBackgroundScreen"
     
-    // 保存發起頁面的路由，用於控制裁剪完成後的返回目標
-    val sourceRoute = remember {
-        navController.previousBackStackEntry?.destination?.route ?: "unknown_route" 
-    }
-    Log.d(tag, "發起頁面路由: $sourceRoute")
-    
-    // 嘗試多種方式獲取圖片URI，首先從 savedStateHandle 獲取
+    // 從多個來源嘗試獲取圖片URI
     val imageUriString = navController.currentBackStackEntry?.savedStateHandle?.get<String>("imageUri")
-        ?: navController.previousBackStackEntry?.arguments?.getString("imageUri")
-        ?: navController.currentBackStackEntry?.arguments?.getString("imageUri")
+        ?: navController.previousBackStackEntry?.savedStateHandle?.get<String>("imageUri")
+        ?: try { 
+            // 從應用層級嘗試獲取
+            (context.applicationContext as? com.example.mycountdays.MyApplication)?.tempImageUri
+        } catch (e: Exception) { null }
+        ?: try {
+            // 從SharedPreferences嘗試獲取
+            context.getSharedPreferences("image_crop_temp", Context.MODE_PRIVATE)
+                .getString("last_image_uri", null)
+        } catch (e: Exception) { null }
     
     Log.d(tag, "接收到的圖片URI: $imageUriString")
     val imageUri = imageUriString?.let { Uri.parse(it) }
@@ -40,12 +43,19 @@ fun SelectBackgroundScreen(navController: NavController) {
     // 圖片裁剪結果
     var croppedImageUri by remember { mutableStateOf<Uri?>(null) }
     
-    // 裁剪選項
+    // 修改裁剪選項，允許自由調整比例
     val cropOptions = CropImageOptions(
         guidelines = CropImageView.Guidelines.ON,
+        // 不強制固定比例，允許使用者自由調整
+        fixAspectRatio = false,
+        // 提供初始比例建議，但不強制
         aspectRatioX = 1,
         aspectRatioY = 1,
-        fixAspectRatio = true
+        // 啟用自由調整比例功能
+        showCropOverlay = true,
+        // 允許調整裁剪框大小
+        showProgressBar = true
+        // 移除不存在的參數 cropperWindowPadding
     )
     
     // 裁剪圖片啟動器
@@ -55,38 +65,37 @@ fun SelectBackgroundScreen(navController: NavController) {
             croppedImageUri = result.uriContent
             Log.d(tag, "裁剪成功: $croppedImageUri")
             
-            // 裁剪成功後，傳遞裁剪後的URI並返回
+            // 裁剪成功後，將結果保存到多個位置確保能被接收到
             croppedImageUri?.let { uri ->
-                // 將裁剪後的 URI 設置到多個位置，確保能被接收到
+                // 將裁剪結果保存到多個位置
                 navController.previousBackStackEntry?.savedStateHandle?.set("croppedImageUri", uri.toString())
                 navController.currentBackStackEntry?.savedStateHandle?.set("croppedImageUri", uri.toString())
-                Log.d(tag, "保存裁剪URI: ${uri}")
                 
-                // 使用明確的導航返回到 AddEventScreen
                 try {
-                    // 使用明確的導航返回到 AddEventScreen
-                    // 這會清除從 AddEventScreen 到當前頁面的導航歷史
-                    navController.navigate("addEventScreen") {
-                        // popUpTo 設置為 addEventScreen，確保不會建立重複的 AddEventScreen 頁面
-                        popUpTo("addEventScreen") {
-                            // inclusive = false 表示不要包含 addEventScreen 自己，
-                            // 這樣會保留 AddEventScreen 頁面而清除其它頁面
-                            inclusive = false
-                            
-                            // 保存狀態，這樣 AddEventScreen 的表單數據不會丟失
-                            saveState = true
-                        }
-                        // 避免創建相同頁面的多個副本
-                        launchSingleTop = true
-                        // 恢復之前保存的狀態
-                        restoreState = true
+                    // 保存到應用層級
+                    val application = context.applicationContext
+                    if (application is com.example.mycountdays.MyApplication) {
+                        application.croppedImageUri = uri.toString()
+                        Log.d(tag, "已將裁剪URI保存到應用程序級別: $uri")
                     }
-                    Log.d(tag, "已導航回 AddEventScreen")
                 } catch (e: Exception) {
-                    Log.e(tag, "導航失敗: ${e.message}")
-                    // 如果明確導航失敗，嘗試簡單返回
-                    navController.popBackStack()
+                    Log.e(tag, "保存裁剪URI到應用層級時出錯: ${e.message}")
                 }
+                
+                try {
+                    // 保存到SharedPreferences
+                    context.getSharedPreferences("image_crop_temp", Context.MODE_PRIVATE)
+                        .edit()
+                        .putString("last_cropped_uri", uri.toString())
+                        .apply()
+                    Log.d(tag, "已將裁剪URI保存到SharedPreferences")
+                } catch (e: Exception) {
+                    Log.e(tag, "保存裁剪URI到SharedPreferences時出錯: ${e.message}")
+                }
+                
+                // 返回上一頁
+                Log.d(tag, "準備返回上一頁")
+                navController.popBackStack()
             }
         } else {
             // 裁剪失敗

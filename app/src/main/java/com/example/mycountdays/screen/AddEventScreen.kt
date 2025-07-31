@@ -43,8 +43,12 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Switch
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.layout.ContentScale
@@ -77,21 +81,18 @@ fun AddEventScreen(navController: NavController, option: String?) {
     val database = remember { AppDatabase.getDatabase(context) }
     val tag = "AddEventScreen"
 
-    // 使用 rememberSaveable 代替 remember 來保存狀態
-    var text by rememberSaveable { mutableStateOf("") }
-    var selectDate by rememberSaveable { mutableStateOf("") }
-    var imageUri by rememberSaveable { mutableStateOf<Uri?>(null) }
-
-    val calendar = Calendar.getInstance()
-    val year = calendar.get(Calendar.YEAR)
-    val month = calendar.get(Calendar.MONTH)
-    val day = calendar.get(Calendar.DAY_OF_MONTH)
-
-    // 使用 rememberSaveable 保存通知設置
-    var showNotification by rememberSaveable { mutableStateOf(false) }
-    var notify100Days by rememberSaveable { mutableStateOf(true) }
-    var notify1Year by rememberSaveable { mutableStateOf(true) }
-    var category by rememberSaveable { mutableStateOf("") }
+    // 獲取要編輯的事件（如果有）
+    val editEvent = navController.previousBackStackEntry?.savedStateHandle?.get<Event>("editEvent")
+    val isEditing = editEvent != null
+    
+    // 根據是否在編輯模式設定初始值
+    var text by rememberSaveable { mutableStateOf(editEvent?.title ?: "") }
+    var selectDate by rememberSaveable { mutableStateOf(editEvent?.date ?: "") }
+    var imageUri by rememberSaveable { mutableStateOf<Uri?>(editEvent?.imageUri?.let { Uri.fromFile(File(it)) }) }
+    var showNotification by rememberSaveable { mutableStateOf(editEvent?.showNotification ?: false) }
+    var notify100Days by rememberSaveable { mutableStateOf(editEvent?.notify100Days ?: true) }
+    var notify1Year by rememberSaveable { mutableStateOf(editEvent?.notify1Year ?: true) }
+    var category by rememberSaveable { mutableStateOf(editEvent?.category ?: "") }
 
 
     // 圖片裁剪完成後的處理
@@ -104,39 +105,161 @@ fun AddEventScreen(navController: NavController, option: String?) {
         }
     }
 
-    // 修改 LaunchedEffect 依賴項，使其能夠在每次返回頁面時都檢查裁剪結果
-    // 使用 navController.currentBackStackEntry 作為依賴，確保頁面返回時重新檢查
-    LaunchedEffect(navController.currentBackStackEntry) {
-        Log.d(tag, "檢查裁剪結果...")
+    // 移除舊的 LaunchedEffect 區塊，合併為單一效果處理器
+    // 使用一個計數器來跟踪生命週期，確保每次頁面可見時都檢查裁剪結果
+    val lifeCycleCount = remember { mutableStateOf(0) }
+    
+    // 使用 DisposableEffect 監聽頁面生命週期
+    DisposableEffect(Unit) {
+        lifeCycleCount.value++
+        onDispose { }
+    }
+    
+    // 統一的裁剪結果處理邏輯，依賴於生命週期計數和導航控制器
+    LaunchedEffect(lifeCycleCount.value, navController.currentBackStackEntry) {
+        Log.d(tag, "檢查裁剪結果... (生命週期計數: ${lifeCycleCount.value})")
         
-        // 嘗試從當前和上一個返回堆棧條目中獲取裁剪結果
-        val croppedUriString = navController.currentBackStackEntry?.savedStateHandle?.get<String>("croppedImageUri")
-            ?: navController.previousBackStackEntry?.savedStateHandle?.get<String>("croppedImageUri")
+        // 安全地獲取可用的 savedStateHandle
+        val sources = mutableListOf<androidx.navigation.NavBackStackEntry?>()
+        sources.add(navController.currentBackStackEntry)
+        sources.add(navController.previousBackStackEntry)
+        
+        // 改用更安全的方式檢查，不直接訪問私有屬性
+        try {
+            // 只嘗試最常見的情況，如果出現異常則忽略
+            if (navController.currentDestination?.route?.contains("SelectBackgroundScreen") == true) {
+                Log.d(tag, "當前頁面是 SelectBackgroundScreen")
+            }
+        } catch (e: Exception) {
+            Log.e(tag, "檢查導航堆棧時出錯: ${e.message}")
+        }
+        
+        // 在可用的來源中查找裁剪結果
+        var croppedUriString: String? = null
+        for ((index, entry) in sources.withIndex()) {
+            val savedStateHandle = entry?.savedStateHandle
+            val uri = savedStateHandle?.get<String>("croppedImageUri")
+            if (uri != null) {
+                Log.d(tag, "在來源 $index 找到裁剪結果: $uri")
+                croppedUriString = uri
+                break
+            }
+        }
             
-        Log.d(tag, "裁剪後的URI: $croppedUriString")
+        Log.d(tag, "最終裁剪結果URI: $croppedUriString")
         
         croppedUriString?.let { uriString ->
-            Log.d(tag, "收到裁剪後的圖片 URI: $uriString")
+            Log.d(tag, "應用裁剪後的圖片 URI: $uriString")
             imageUri = Uri.parse(uriString)
             
-            // 從兩個可能的位置清除數據
-            navController.currentBackStackEntry?.savedStateHandle?.remove<String>("croppedImageUri")
-            navController.previousBackStackEntry?.savedStateHandle?.remove<String>("croppedImageUri")
+            // 從所有可能的位置清除數據
+            sources.forEach { it?.savedStateHandle?.remove<String>("croppedImageUri") }
+            Log.d(tag, "已清除裁剪URI資料")
         }
     }
 
-    // 修改圖片選擇器，在選擇完圖片後導航到背景選擇頁面
+    // 添加新的狀態標誌來跟踪是否從裁剪頁面返回
+    var isReturningFromCrop by rememberSaveable { mutableStateOf(false) }
+    
+    // 檢測從裁剪頁面返回
+    val previousDestinationRoute = remember { mutableStateOf<String?>(null) }
+    
+    // 監聽導航變化，檢測從裁剪頁面返回的情況
+    LaunchedEffect(navController.currentDestination) {
+        val currentRoute = navController.currentDestination?.route
+        Log.d(tag, "當前路由: $currentRoute, 前一個路由: ${previousDestinationRoute.value}")
+        
+        // 如果前一個頁面是裁剪頁面，且現在回到了添加頁面，則標記為從裁剪頁面返回
+        if (previousDestinationRoute.value == "SelectBackgroundScreen" && currentRoute?.contains("addEventScreen") == true) {
+            Log.d(tag, "檢測到從裁剪頁面返回")
+            isReturningFromCrop = true
+        }
+        
+        previousDestinationRoute.value = currentRoute
+    }
+    
+    // 當從裁剪頁面返回時，立即檢查結果
+    LaunchedEffect(isReturningFromCrop) {
+        if (isReturningFromCrop) {
+            Log.d(tag, "從裁剪頁面返回，開始檢查結果")
+            
+            // 安全地獲取可用的 savedStateHandle
+            val sources = mutableListOf<androidx.navigation.NavBackStackEntry?>()
+            sources.add(navController.currentBackStackEntry)
+            sources.add(navController.previousBackStackEntry)
+            
+            // 在可用的來源中查找裁剪結果
+            var croppedUriString: String? = null
+            for ((index, entry) in sources.withIndex()) {
+                val savedStateHandle = entry?.savedStateHandle
+                val uri = savedStateHandle?.get<String>("croppedImageUri")
+                if (uri != null) {
+                    Log.d(tag, "在來源 $index 找到裁剪結果: $uri")
+                    croppedUriString = uri
+                    break
+                }
+            }
+                
+            Log.d(tag, "最終裁剪結果URI: $croppedUriString")
+            
+            croppedUriString?.let { uriString ->
+                Log.d(tag, "應用裁剪後的圖片 URI: $uriString")
+                imageUri = Uri.parse(uriString)
+                
+                // 從所有可能的位置清除數據
+                sources.forEach { it?.savedStateHandle?.remove<String>("croppedImageUri") }
+                Log.d(tag, "已清除裁剪URI資料")
+            }
+            
+            // 重置標誌
+            isReturningFromCrop = false
+        }
+    }
+    
+    // 修改圖片選擇器，確保傳遞所有必要信息
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = PickVisualMedia()
     ) { uri: Uri? ->
         // 如果成功選擇圖片，導航到背景選擇頁面進行裁剪
         if (uri != null) {
             Log.d(tag, "選擇圖片 URI: $uri，導航到裁剪畫面")
-            // 將 URI 保存到 savedStateHandle 以便傳遞給裁剪頁面
+            
+            // 將所有關鍵信息保存到多個位置，增加被正確接收的機會
             navController.currentBackStackEntry?.savedStateHandle?.set("imageUri", uri.toString())
+            navController.currentBackStackEntry?.savedStateHandle?.set("sourceScreen", "addEventScreen")
+            
+            // 在全局對象上也保存一份
+            try {
+                val application = context.applicationContext
+                if (application is com.example.mycountdays.MyApplication) {
+                    application.tempImageUri = uri.toString()
+                    Log.d(tag, "已將圖片URI保存到應用程序級別: $uri")
+                }
+            } catch (e: Exception) {
+                Log.e(tag, "保存URI到應用層級時出錯: ${e.message}")
+            }
+            
+            // 在SharedPreferences中也臨時保存一份
+            try {
+                context.getSharedPreferences("image_crop_temp", Context.MODE_PRIVATE)
+                    .edit()
+                    .putString("last_image_uri", uri.toString())
+                    .apply()
+                Log.d(tag, "已將圖片URI保存到SharedPreferences")
+            } catch (e: Exception) {
+                Log.e(tag, "保存URI到SharedPreferences時出錯: ${e.message}")
+            }
+            
+            // 導航到裁剪頁面
             navController.navigate("SelectBackgroundScreen")
         }
     }
+    
+    // 獲取當前日期
+    val calendar = Calendar.getInstance()
+    val year = calendar.get(Calendar.YEAR)
+    val month = calendar.get(Calendar.MONTH)
+    val day = calendar.get(Calendar.DAY_OF_MONTH)
     
     //日期選擇器
     val datePickerDialog  = DatePickerDialog(
@@ -144,7 +267,7 @@ fun AddEventScreen(navController: NavController, option: String?) {
         { _: DatePicker, year: Int, month: Int, dayOfMonth: Int ->
             selectDate = "$year/${month + 1}/$dayOfMonth"
         },
-        year,month,day
+        year, month, day
     )
 
 Scaffold(
@@ -152,10 +275,16 @@ Scaffold(
     topBar = {
         CenterAlignedTopAppBar(
             title = {
-                Text(text = "Add Event")
+                Text(text = if (isEditing) "編輯事件" else "新增事件")
             },
             navigationIcon = {
-
+                // 新增返回按鈕
+                IconButton(onClick = { navController.popBackStack() }) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "返回"
+                    )
+                }
             }
         )
     }
@@ -166,8 +295,6 @@ Scaffold(
                 .fillMaxSize()
                 .padding(paddingValues)
                 //置中
-
-
         ){
             Column(
                 //至中
@@ -318,42 +445,77 @@ Scaffold(
                         }
                         val imagePath = imageUri?.let { uri ->
                             saveImageToInternalStorage(context, uri)
-                        } ?: ""
+                        } ?: editEvent?.imageUri ?: ""
 
 
-                        //新增置資料庫
-                        val event = Event(
-                            title = text,
-                            date = selectDate,
-                            imageUri = imagePath,
-                            showNotification = showNotification,
-                            notify100Days = notify100Days,
-                            notify1Year = notify1Year,
-                            category = category
-                        )
-                        CoroutineScope(Dispatchers.IO).launch {
-                            database.eventDao().insertEvent(event)
+                        //如果是編輯模式，保留原來的 id 並更新事件
+                        if (isEditing) {
+                            val updatedEvent = editEvent!!.copy(
+                                title = text,
+                                date = selectDate,
+                                imageUri = imagePath,
+                                showNotification = showNotification,
+                                notify100Days = notify100Days,
+                                notify1Year = notify1Year,
+                                category = category
+                            )
                             
-                            // 處理通知
-                            if (showNotification) {
+                            CoroutineScope(Dispatchers.IO).launch {
+                                database.eventDao().updateEvents(listOf(updatedEvent))
+                                
+                                // 處理通知
                                 withContext(Dispatchers.Main) {
                                     val notificationHelper = NotificationHelper(context)
-                                    notificationHelper.showPersistentNotification(event)
+                                    if (showNotification) {
+                                        notificationHelper.showPersistentNotification(updatedEvent)
+                                    } else {
+                                        notificationHelper.removePersistentNotification(updatedEvent.id)
+                                    }
+                                    
+                                    // 清除編輯狀態
+                                    navController.previousBackStackEntry?.savedStateHandle?.remove<Event>("editEvent")
+                                    
+                                    // 返回首頁
+                                    navController.navigate("home") {
+                                        popUpTo("home") { inclusive = true }
+                                    }
                                 }
                             }
+                        } else {
+                            // 新增事件，原有邏輯
+                            val event = Event(
+                                title = text,
+                                date = selectDate,
+                                imageUri = imagePath,
+                                showNotification = showNotification,
+                                notify100Days = notify100Days,
+                                notify1Year = notify1Year,
+                                category = category
+                            )
                             
-                            database.eventDao().getAllEvents()
-                        }
+                            CoroutineScope(Dispatchers.IO).launch {
+                                database.eventDao().insertEvent(event)
+                                
+                                // 處理通知
+                                if (showNotification) {
+                                    withContext(Dispatchers.Main) {
+                                        val notificationHelper = NotificationHelper(context)
+                                        notificationHelper.showPersistentNotification(event)
+                                    }
+                                }
+                                
+                                database.eventDao().getAllEvents()
+                            }
 
-                        navController.navigate("home") {
-                            popUpTo("home") { inclusive = true }
+                            navController.navigate("home") {
+                                popUpTo("home") { inclusive = true }
+                            }
                         }
-
                     },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text("建立")
+                    Text(if (isEditing) "儲存" else "建立")
                 }
             }
 
