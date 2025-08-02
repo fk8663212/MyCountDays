@@ -1,3 +1,5 @@
+https://drive.google.com/file/d/15hUod67ccudgJiKKhNM1Ow0k3nEzX3Eb/view?usp=sharing
+
 # 拿捏計日
 
 一款基於 Android（Kotlin）開發的「計日子」應用，幫助你輕鬆記錄與查看重要事件的倒數／累計天數。
